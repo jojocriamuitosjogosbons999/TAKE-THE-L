@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vídeo Infinito</title>
+<style>
+  :root{--bg:#08070d;--panel:#16131e;--line:#3a3348;--fg:#ece6d2;--dim:#9d95ad;--accent:#f5c518;--danger:#e2452f;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:"Courier New",ui-monospace,monospace;overflow-x:hidden}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:16px}
+  h1{margin:0;font-size:clamp(26px,6vw,40px);color:var(--accent)}
+  h2{margin:0;font-size:24px;color:var(--accent)}
+  p{margin:0;color:var(--dim)}
+  #tempo{font-size:24px;color:var(--fg);font-variant-numeric:tabular-nums}
+  #palco{will-change:transform;transform-origin:50% 50%;position:relative;max-width:720px;padding:14px;background:#2b2622;border-radius:26px;box-shadow:inset 0 0 0 3px #4a423b,0 10px 30px #000a}
+  #palco .video{border-radius:40px/28px}
+  #palco::after{content:"";position:absolute;inset:14px;border-radius:40px/28px;pointer-events:none;
+    background:repeating-linear-gradient(transparent 0 2px,#0005 2px 4px),radial-gradient(ellipse,transparent 50%,#000c 100%);
+    animation:pisca 0.13s steps(2) infinite}
+  #zoa{position:absolute;z-index:2;pointer-events:none;font-size:clamp(24px,7vw,54px);font-weight:700;color:#fff;
+    text-shadow:3px 0 #f0f,-3px 0 #0ff,0 0 12px #000;transform:rotate(-6deg);white-space:nowrap}
+  #aviso{border:3px dashed var(--danger);border-radius:10px;padding:12px 14px;color:var(--fg);background:#e2452f22;font-size:19px}
+  #aviso b{color:var(--danger)}
+  @keyframes pisca{50%{opacity:.82}}
+  @media(prefers-reduced-motion:reduce){#palco::after{animation:none}}
+  .video{position:relative;aspect-ratio:16/9;max-width:720px;width:100%;border-radius:14px;overflow:hidden;background:#000;cursor:pointer;padding:0;border:0;display:block}
+  .video img,.video iframe{width:100%;height:100%;object-fit:cover;display:block;border:0}
+  .video .tocar{position:absolute;inset:0;margin:auto;width:72px;height:72px;border-radius:50%;
+    background:var(--accent);color:#2a1d00;font-size:2rem;display:flex;align-items:center;justify-content:center}
+  .video:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  button.acao{font:inherit;font-size:20px;padding:10px 18px;border-radius:6px;border:2px solid var(--danger);background:var(--danger);color:#fff;cursor:pointer}
+  button.leve{font:inherit;font-size:16px;padding:6px 12px;border-radius:6px;border:2px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+  input{font:inherit;font-size:20px;padding:8px 10px;background:#000;color:var(--fg);border:2px solid var(--line);border-radius:6px;min-width:0;flex:1 1 180px;max-width:320px}
+  #res{color:var(--accent);font-size:20px;min-height:1.3em}
+  .rank{background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+  li{display:grid;grid-template-columns:3ch 1fr auto;gap:10px;font-size:20px;padding:4px 6px;border-radius:4px}
+  li:first-child{background:#f5c51822;color:var(--accent)}
+  li span{min-width:0;overflow-wrap:anywhere}
+  li b{font-weight:400;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vídeo Infinito</h1>
+  <p>Escreva seu nome e clique na capa. O vídeo fica repetindo até você cansar, e quanto mais tempo passa, mais esquisita a tela fica.</p>
+
+  <p id="aviso"><b>AVISO:</b> este site foi feito para te irritar. Você vai ficar com raiva. Continue por sua conta e risco.</p>
+
+  <div class="row">
+    <label for="nome">Seu nome:</label>
+    <input id="nome" maxlength="16" autocomplete="off" placeholder="Jogador">
+  </div>
+
+  <div id="palco"></div>
+
+  <div class="row">
+    <span id="tempo">Você aguentou 0:00</span>
+    <button class="acao" id="cansei" hidden>Cansei!</button>
+  </div>
+  <p id="res"></p>
+
+  <section class="rank">
+    <h2>Ranking de quem aguentou mais</h2>
+    <ol id="lista"></ol>
+    <p id="vazio">Ninguém tentou ainda. Seja o primeiro!</p>
+    <div class="row"><button class="leve" id="limpar">Apagar ranking</button></div>
+    <p>Este ranking fica guardado só neste aparelho.</p>
+  </section>
+</div>
+
+<script>
+  // Para trocar de vídeo, mude só este código (a parte depois de "v=" no link do YouTube).
+  var VIDEO='_bckcpIUBo8';
+
+  var palco=document.getElementById('palco'), seg=0, rodando=false, inicio=0, rank=[], limparT=null;
+  try{rank=JSON.parse(localStorage.getItem('video_infinito_rank')||'[]')||[]}catch(e){rank=[]}
+  try{document.getElementById('nome').value=localStorage.getItem('video_infinito_nome')||''}catch(e){}
+
+  function fmt(s){var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+'h ':'')+(h&&m<10?'0':'')+m+':'+(x<10?'0':'')+x}
+  function salva(){try{localStorage.setItem('video_infinito_rank',JSON.stringify(rank))}catch(e){}}
+  function desenhaRank(){
+    var ol=document.getElementById('lista');ol.innerHTML='';
+    rank.forEach(function(r,i){
+      var li=document.createElement('li'),n=document.createElement('span'),t=document.createElement('b'),p=document.createElement('span');
+      p.textContent=(i+1)+'º';n.textContent=r.nome;t.textContent=fmt(r.seg);
+      li.appendChild(p);li.appendChild(n);li.appendChild(t);ol.appendChild(li);
+    });
+    document.getElementById('vazio').hidden=rank.length>0;
+    document.getElementById('limpar').hidden=rank.length===0;
+  }
+  function mostra(){document.getElementById('tempo').textContent='Você aguentou '+fmt(seg)}
+
+  // 1. Só a capa, com o botão ▶ em cima.
+  function capa(){
+    var id=encodeURIComponent(VIDEO);
+    palco.style.transform='';
+    palco.innerHTML='<button class="video" id="capa" aria-label="Tocar o vídeo">'+
+      '<img src="https://i.ytimg.com/vi/'+id+'/hqdefault.jpg" alt="Capa do vídeo">'+
+      '<span class="tocar">▶</span></button>';
+    document.getElementById('capa').addEventListener('click',tocar);
+  }
+  // 2. No clique, troca a capa pelo player do YouTube, repetindo sem parar.
+  function tocar(){
+    var id=encodeURIComponent(VIDEO);
+    palco.innerHTML='<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/'+id+
+      '?autoplay=1&rel=0&loop=1&playlist='+id+'&playsinline=1" title="Vídeo" '+
+      'allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>';
+    seg=0;rodando=true;inicio=performance.now();mostra();proxZoa=4;
+    document.getElementById('res').textContent='';
+    document.getElementById('cansei').hidden=false;
+    try{localStorage.setItem('video_infinito_nome',document.getElementById('nome').value)}catch(e){}
+  }
+  document.getElementById('cansei').onclick=function(){
+    rodando=false;this.hidden=true;
+    var nome=(document.getElementById('nome').value||'').trim()||'Jogador';
+    rank.push({nome:nome,seg:seg});
+    rank.sort(function(a,b){return b.seg-a.seg});
+    var pos=rank.findIndex(function(r){return r.nome===nome&&r.seg===seg})+1;
+    rank=rank.slice(0,10);salva();
+    document.getElementById('res').textContent=nome+' cansou depois de '+fmt(seg)+'.'+(pos&&pos<=10?' Ficou em '+pos+'º lugar!':' Não entrou no top 10.');
+    capa();desenhaRank();
+  };
+  document.getElementById('limpar').onclick=function(){
+    var b=this;
+    if(b.dataset.ok){clearTimeout(limparT);delete b.dataset.ok;b.textContent='Apagar ranking';rank=[];salva();desenhaRank()}
+    else{b.dataset.ok='1';b.textContent='Apagar mesmo?';limparT=setTimeout(function(){delete b.dataset.ok;b.textContent='Apagar ranking'},3000)}
+  };
+  // 4. Zoeiras que piscam em cima do vídeo, cada vez mais frequentes.
+  var ZOA=['Take the L!','Você é burro!','Ainda aí?','Desiste logo!','Toma o L!','Que feio...','Vai chorar?','Tá com raiva?','Clica em Cansei, vai!','Perdeu tempo!','kkkkkkkk','L + ratio'];
+  var proxZoa=4;
+  function zoeira(){
+    var z=document.createElement('div');z.id='zoa';
+    z.textContent=ZOA[Math.floor(Math.random()*ZOA.length)];
+    z.style.left=(5+Math.random()*40)+'%';z.style.top=(10+Math.random()*65)+'%';
+    z.style.transform='rotate('+(Math.random()*24-12).toFixed(1)+'deg)';
+    var velho=document.getElementById('zoa');if(velho)velho.remove();
+    palco.appendChild(z);setTimeout(function(){z.remove()},1600);
+  }
+  setInterval(function(){
+    if(rodando&&!document.hidden){
+      seg++;mostra();
+      if(--proxZoa<=0){zoeira();proxZoa=Math.max(2,8-Math.floor(seg/60))+Math.floor(Math.random()*3)}
+    }
+  },1000);
+
+  // 3. A tela vai ficando esquisita: zoom que vai e volta bem devagar e cresce com o tempo.
+  var calmo=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function esquisito(agora){
+    if(rodando&&!calmo){
+      var t=(agora-inicio)/1000;
+      var forca=Math.min(1,t/600);                 // chega no máximo depois de 10 minutos
+      var zoom=1+forca*0.35*Math.sin(t/7);         // vai e volta a cada ~44 segundos
+      var gira=forca*5*Math.sin(t/11);             // inclina um pouquinho
+      var cor=forca*40*Math.sin(t/13);             // as cores mudam de leve
+      palco.style.transform='scale('+zoom.toFixed(4)+') rotate('+gira.toFixed(3)+'deg)';
+      palco.style.filter='hue-rotate('+cor.toFixed(1)+'deg)';
+    }else if(!rodando){palco.style.transform='';palco.style.filter=''}
+    requestAnimationFrame(esquisito);
+  }
+  requestAnimationFrame(esquisito);
+
+  capa();mostra();desenhaRank();
+</script>
+</body>
+</html>
